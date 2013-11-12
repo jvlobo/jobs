@@ -5,83 +5,98 @@ require 'twitter'
 require_relative 'twitter_config'
 
 class Jobs
-	attr_accessor :hash_jobs, :web, :base_file, :refresh_file
- 
-	def initialize(web)
-		@web = web
-		@base_file = "base_#{@web}.dat"
-		@refresh_file = "refresh_#{@web}.dat"
-	end
+    attr_accessor :hash_jobs, :web, :base_file, :refresh_file
 
-	def looking_for_jobs()
-		@web == "infojobs" ? infojobs() : foros_del_web()
-	end
+    def initialize(web)
+        @web = web
+        @base_file = "base_#{@web}.dat"
+        @refresh_file = "refresh_#{@web}.dat"
+        @hash_jobs = Array.new
+    end
 
-	def new_file(name)
-		name == "base" ? filename = @base_file : filename = @refresh_file
-		file = File.new("#{filename}", "w")
-		file.write(looking_for_jobs())
-		file.close
-	end
+    def looking_for_jobs()
+        @web == "infojobs" ? infojobs() : foros_del_web()
+    end
 
-	def twitter(msg)
-		Twitter.update("#{msg} - #{hash_jobs[0][:name]} - #{hash_jobs[0][:url]}")
-	end
+    def new_file(name)
+        name == "base" ? filename = @base_file : filename = @refresh_file
+        file = File.new("#{filename}", "w")
+        file.sync = true #flush buffer automated = http://www.ruby-doc.org/core-2.0.0/IO.html#method-i-sync-3D
+        file.write(looking_for_jobs())
+        file.close
+    end
 
-	def compare_files()
-		FileUtils.compare_file("#{@base_file}", "#{refresh_file}")
-	end
+    def twitter(msg)
+        if @hash_jobs.class == Array then
+			begin
+				Twitter.update("#{msg} - #{@hash_jobs.first[:name]} - #{@hash_jobs.first[:url]}")
+			rescue Twitter::Error
+				puts "Hey Loser, Twitter says you cannot post same twice"
+			rescue Exception
+				puts "some other error happened!"
+			end 
+        end
+        #puts "#{msg} - #{hash_jobs.first[:name]} - #{hash_jobs.first[:url]}"
+    end
 
-	def update_files()
-		FileUtils.copy_file("#{refresh_file}", "#{@base_file}")
-	end
+    def compare_files()
+        FileUtils.compare_file("#{@base_file}", "#{refresh_file}")
+    end
 
-	private
-		def get(uri)
-		  uri = URI.parse("#{uri}")
-		  response = Net::HTTP.get_response(uri)
-		  if response.code.to_i == 404
-		    raise RuntimeError, "The api returned status code #{response.code} for #{uri}"
-		  end
-		  
-		  Nokogiri::HTML(response.body)
-		end
+    def update_files()
+        FileUtils.copy_file("#{refresh_file}", "#{@base_file}")
+    end
 
-		def infojobs()
-			jobs = get("https://freelance.infojobs.net/proyectos/informatica").css("ul#resultdata > li")
+    private
+        def get(uri)
+	        uri = URI.parse("#{uri}")
+	        
+	        begin
+                response = Net::HTTP.get_response(uri)
+	        rescue StandardError
+                puts "Network error"
+	        end
 
-			hash_jobs = Array.new
+	        if response.code.to_i == 404
+                raise RuntimeError, "The api returned status code #{response.code} for #{uri}"
+	        end
 
-			jobs.count.times{ |i|
-				jobs_name = jobs[i].css(".name") #seleccionamos los <a href> con la clase "name"
-				jobs_list_details = jobs[i].css(".list-details") #seleccionamos el <ul> con la clase "name"
+	        Nokogiri::HTML(response.body)
+        end
 
-				hash_single_job = Hash.new
-				hash_single_job[:name] = jobs_name.css("span").text
-				hash_single_job[:url] =  "https://freelance.infojobs.net" + jobs_name[0]["href"]
-				hash_single_job[:date] = jobs_list_details.css(".date > span").text
+        def infojobs()
+            jobs = get("https://freelance.infojobs.net/proyectos/informatica").css("ul#resultdata > li")
 
-				hash_jobs << hash_single_job
-			}
+            @hash_jobs.clear
 
-			@hash_jobs = hash_jobs
-		end
+            jobs.count.times{ |i|
+                jobs_name = jobs[i].css(".name") #seleccionamos los <a href> con la clase "name"
+                jobs_list_details = jobs[i].css(".list-details") #seleccionamos el <ul> con la clase "name"
 
-		def foros_del_web()
-			jobs = get("http://www.forosdelweb.com/f65/").css("tbody#threadbits_forum_65 > tr > .tdtitle")
+                hash_single_job = Hash.new
+                hash_single_job[:name] = jobs_name.css("span").text
+                hash_single_job[:url] =  "https://freelance.infojobs.net" + jobs_name[0]["href"]
+                hash_single_job[:date] = jobs_list_details.css(".date > span").text
 
-			hash_jobs = Array.new
+                @hash_jobs << hash_single_job
+            }
+            @hash_jobs
+        end
 
-			jobs.count.times{ |i|
-				jobs_name = jobs[i].css("div > a") #seleccionamos los td con la clase "tdtitle"
-				
-				hash_single_job = Hash.new
-				hash_single_job[:name] = jobs_name.text
-				hash_single_job[:url] =  jobs_name[0]["href"]
+        def foros_del_web()
+            jobs = get("http://www.forosdelweb.com/f65/").css("tbody#threadbits_forum_65 > tr > .tdtitle")
 
-				hash_jobs << hash_single_job
-			}
+            @hash_jobs.clear
 
-			@hash_jobs = hash_jobs	
-		end	
+            jobs.count.times{ |i|
+                jobs_name = jobs[i].css("div > a") #seleccionamos los td con la clase "tdtitle"
+                
+                hash_single_job = Hash.new
+                hash_single_job[:name] = jobs_name.text
+                hash_single_job[:url] =  jobs_name[0]["href"]
+
+                @hash_jobs << hash_single_job
+            }
+            @hash_jobs
+        end        
 end
