@@ -20,5 +20,5 @@ while true do
 		job_fdw.update_files()
 	end
 
-	sleep 10
+	sleep 30
 end

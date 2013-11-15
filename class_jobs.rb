@@ -55,13 +55,13 @@ class Jobs
                 response = Net::HTTP.get_response(uri)
 	        rescue StandardError
                 puts "Network error"
+                sleep 60
+                retry
 	        end
 
-	        if response.code.to_i == 404
-                raise RuntimeError, "The api returned status code #{response.code} for #{uri}"
-	        end
-
-	        Nokogiri::HTML(response.body)
+            if !response.nil? then 
+	           Nokogiri::HTML(response.body)
+           end
         end
 
         def infojobs()
