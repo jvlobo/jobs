@@ -1,4 +1,5 @@
 require 'net/http'
+require 'net/https'
 require 'nokogiri'
 require 'fileutils'
 require 'twitter'
@@ -29,7 +30,7 @@ class Jobs
     def twitter(msg)
         if @hash_jobs.class == Array then
 			begin
-				Twitter.update("#{msg} - #{@hash_jobs.first[:name]} - #{@hash_jobs.first[:url]}")
+				client.update("#{msg} - #{@hash_jobs.first[:name]} - #{@hash_jobs.first[:url]}")
 			rescue Twitter::Error
 				puts "Hey Loser, Twitter says you cannot post same twice"
 			rescue Exception
@@ -48,24 +49,46 @@ class Jobs
     end
 
     private
-        def get(uri)
+        def getFW(uri)
 	        uri = URI.parse("#{uri}")
-	        
+
 	        begin
                 response = Net::HTTP.get_response(uri)
-	        rescue StandardError
+            rescue StandardError
                 puts "Network error"
                 sleep 60
                 retry
-	        end
+            end
 
             if !response.nil? then 
 	           Nokogiri::HTML(response.body)
            end
         end
 
+        def getIJ(uri)
+            uri = URI.parse("#{uri}")
+
+            http = Net::HTTP.new(uri.host, uri.port)
+            http.use_ssl = true
+            http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+
+            request = Net::HTTP::Get.new(uri.request_uri)
+
+            begin
+                response = http.request(request)
+            rescue StandardError
+                puts "Network error"
+                sleep 60
+                retry
+            end
+
+            if !response.nil? then 
+               Nokogiri::HTML(response.body)
+           end
+        end
+
         def infojobs()
-            jobs = get("https://freelance.infojobs.net/proyectos/informatica").css("ul#resultdata > li")
+            jobs = getIJ("https://freelance.infojobs.net/proyectos/informatica").css("ul#resultdata > li")
 
             @hash_jobs.clear
 
@@ -84,7 +107,7 @@ class Jobs
         end
 
         def foros_del_web()
-            jobs = get("http://www.forosdelweb.com/f65/").css("tbody#threadbits_forum_65 > tr > .tdtitle")
+            jobs = getFW("http://www.forosdelweb.com/f65/").css("tbody#threadbits_forum_65 > tr > .tdtitle")
 
             @hash_jobs.clear
 
